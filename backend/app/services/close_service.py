@@ -28,6 +28,30 @@ def preview(business_day: str | None = None) -> dict[str, Any]:
         conn.close()
 
 
+def _parse_declared(body: dict[str, Any]) -> float:
+    raw = body.get("declared_cash")
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        raise HTTPException(400, "实盘现金不能为空")
+    try:
+        value = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raise HTTPException(400, "实盘现金必须是数字")
+    if value < 0:
+        raise HTTPException(400, "实盘现金不能为负")
+    return value
+
+
+def list_unsealed(before_day: str | None = None) -> dict[str, Any]:
+    """未封日清单入口；与拨钟写入口、总览共用 close_repo.unsealed_days。"""
+    conn = connect()
+    try:
+        day = before_day or settings_repo.get(conn, "business_day") or ""
+        days = close_repo.unsealed_days(conn, day) if day else []
+        return {"business_day": day, "unsealed_days": days}
+    finally:
+        conn.close()
+
+
 def seal(body: dict[str, Any]) -> dict[str, Any]:
     conn = connect(immediate=True)
     try:
@@ -36,7 +60,14 @@ def seal(body: dict[str, Any]) -> dict[str, Any]:
             raise HTTPException(400, "未指定营业日")
         if close_repo.is_sealed(conn, day):
             raise HTTPException(409, f"营业日 {day} 已封账")
-        declared = float(body["declared_cash"])
+        try:
+            declared = _parse_declared(body)
+        except HTTPException as exc:
+            # 封账草稿失败需持久化，供未封日清单展示「曾草稿失败」；
+            # 先提交标记再抛出，外层 rollback 对已结束事务为空操作。
+            close_repo.mark_draft_failed(conn, day, str(exc.detail), _now())
+            conn.commit()
+            raise
         total, count = line_repo.day_total(conn, day)
         variance = round(declared - total, 2)
         sealed_at = _now()
@@ -61,6 +92,7 @@ def seal(body: dict[str, Any]) -> dict[str, Any]:
             disposition=disposition,
             created_at=sealed_at,
         )
+        close_repo.clear_draft_failures(conn, day)
         conn.commit()
         return {
             "batch_id": batch_id,

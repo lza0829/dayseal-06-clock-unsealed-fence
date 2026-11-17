@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS reopen_requests (
   business_day TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'none'
 );
+CREATE TABLE IF NOT EXISTS seal_draft_failures (
+  id INTEGER PRIMARY KEY,
+  business_day TEXT NOT NULL UNIQUE,
+  reason TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 '''
 
 

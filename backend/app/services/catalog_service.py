@@ -13,12 +13,15 @@ def dashboard() -> dict[str, Any]:
         day = settings_repo.get(conn, "business_day") or ""
         total, count = line_repo.day_total(conn, day) if day else (0.0, 0)
         sealed = close_repo.is_sealed(conn, day) if day else False
+        # 与拨钟写入口、封账台同源的未封日清单，持久化展示、不得隐藏。
+        unsealed = close_repo.unsealed_days(conn, day) if day else []
         return {
             "business_day": day,
             "till_count": len(till_repo.list_tills(conn)),
             "line_count_today": count,
             "system_total_today": total,
             "sealed_today": sealed,
+            "unsealed_days": unsealed,
             "close_batch_count": conn.execute("SELECT COUNT(*) c FROM close_batches").fetchone()["c"],
             "open_variance_count": conn.execute(
                 "SELECT COUNT(*) c FROM variance_rows WHERE disposition='pending'"

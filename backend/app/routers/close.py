@@ -9,6 +9,11 @@ def preview(business_day: str | None = None):
     return svc.preview(business_day)
 
 
+@router.get("/unsealed")
+def unsealed(business_day: str | None = None):
+    return svc.list_unsealed(business_day)
+
+
 @router.post("/seal")
 def seal(body: dict = Body(...)):
     return svc.seal(body)

@@ -5,6 +5,7 @@ import { api } from '../api'
 const rows = ref([])
 const tills = ref([])
 const day = ref('')
+const clockDay = ref('')
 const form = ref({ till_code: 'TILL-A', amount: 10, pay_method: '现金', note: '' })
 const msg = ref('')
 const err = ref('')
@@ -12,7 +13,8 @@ const err = ref('')
 async function load() {
   err.value = ''
   const d = await api.getDay()
-  day.value = d.business_day
+  clockDay.value = d.business_day
+  if (!day.value) day.value = clockDay.value
   tills.value = await api.tills()
   rows.value = await api.lines(day.value)
 }
@@ -21,7 +23,7 @@ async function add() {
   msg.value = ''; err.value = ''
   try {
     await api.createLine({ ...form.value, business_day: day.value })
-    msg.value = '已登记流水'
+    msg.value = `已登记流水（营业日 ${day.value}）`
     await load()
   } catch (e) { err.value = e.message }
 }
@@ -31,7 +33,12 @@ onMounted(load)
 
 <template>
   <h2>收银流水</h2>
-  <p class="msg">营业日 {{ day }}</p>
+  <div class="row">
+    <label>营业日（未封日可补流水，已封日禁写）
+      <input v-model="day" placeholder="YYYY-MM-DD" />
+    </label>
+    <button class="btn ghost" @click="day = clockDay; load()">回到当前钟面 {{ clockDay }}</button>
+  </div>
   <div class="row">
     <label>收银机
       <select v-model="form.till_code">
